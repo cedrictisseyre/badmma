@@ -447,8 +447,11 @@
         const sm = parseInt($('#score-mma').value, 10);
         const sb = parseInt($('#score-bad').value, 10);
         if (Number.isNaN(sm) || Number.isNaN(sb)) return null;
-        if (sb >= 21 && sb > sm) return 'BAD';
-        if (sm >= 11 && sm > sb) return 'MMA';
+        const badWon = sb >= 21;
+        const mmaWon = sm >= 11;
+        if (badWon && mmaWon) return (sb / 21) >= (sm / 11) ? 'BAD' : 'MMA';
+        if (badWon) return 'BAD';
+        if (mmaWon) return 'MMA';
         return null;
     }
 
