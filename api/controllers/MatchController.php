@@ -23,11 +23,15 @@ final class MatchController
         Auth::requireAdmin();
         Auth::requireCsrf();
 
-        $data  = Request::body();
-        $mma   = Request::intOrNull($data, 'participant_mma_id');
-        $bad   = Request::intOrNull($data, 'participant_bad_id');
-        $ordre = Request::intOrNull($data, 'ordre') ?? 0;
+        $data       = Request::body();
+        $mma        = Request::intOrNull($data, 'participant_mma_id');
+        $bad        = Request::intOrNull($data, 'participant_bad_id');
+        $ordre      = Request::intOrNull($data, 'ordre') ?? 0;
+        $discipline = strtoupper(Request::str($data, 'discipline'));
 
+        if (!in_array($discipline, ['BADMINTON', 'MMA'], true)) {
+            Response::error('Discipline invalide (BADMINTON ou MMA).', 422);
+        }
         if ($mma === null || $bad === null) {
             Response::error('Un pratiquant MMA et un pratiquant Badminton sont requis.', 422);
         }
@@ -36,10 +40,10 @@ final class MatchController
         self::assertCategorie($bad, 'BADMINTON');
 
         $stmt = Database::get()->prepare(
-            'INSERT INTO matches (participant_mma_id, participant_bad_id, ordre, statut)
-             VALUES (?, ?, ?, "a_venir")'
+            'INSERT INTO matches (participant_mma_id, participant_bad_id, discipline, ordre, statut)
+             VALUES (?, ?, ?, ?, "a_venir")'
         );
-        $stmt->execute([$mma, $bad, $ordre]);
+        $stmt->execute([$mma, $bad, $discipline, $ordre]);
         Response::json(['id' => (int) Database::get()->lastInsertId()], 201);
     }
 
@@ -61,12 +65,7 @@ final class MatchController
         $vainqueur = array_key_exists('vainqueur_id', $data)
             ? Request::intOrNull($data, 'vainqueur_id')
             : (isset($match['vainqueur_id']) ? (int) $match['vainqueur_id'] : null);
-
-        if ($vainqueur !== null
-            && $vainqueur !== (int) $match['participant_mma_id']
-            && $vainqueur !== (int) $match['participant_bad_id']) {
-            Response::error('Le vainqueur doit être l\'un des deux pratiquants de l\'affrontement.', 422);
-        }
+        self::assertWinnerBelongs($vainqueur, $match);
 
         $stmt = Database::get()->prepare(
             'UPDATE matches SET ordre = ?, statut = ?, vainqueur_id = ? WHERE id = ?'
@@ -86,13 +85,12 @@ final class MatchController
     }
 
     /**
-     * Saisie des résultats des 2 manches, puis calcul automatique du vainqueur.
-     * Corps attendu :
-     *   badminton: { score_mma, score_bad }
-     *   mma:       { soumission (0|1), duree_secondes }
-     *   vainqueur_id (optionnel) : forçage manuel, requis en cas de 1-1.
+     * Saisie du résultat d'un match, selon sa discipline.
+     *   BADMINTON : { score_mma, score_bad }
+     *   MMA       : { soumission (0|1), duree_secondes }
+     * vainqueur_id (optionnel) : forçage manuel du vainqueur.
      */
-    public static function saveRounds(int $id): void
+    public static function saveResult(int $id): void
     {
         Auth::requireAdmin();
         Auth::requireCsrf();
@@ -102,87 +100,41 @@ final class MatchController
         $badId = (int) $match['participant_bad_id'];
         $data  = Request::body();
 
-        $pdo = Database::get();
-        $pdo->beginTransaction();
+        $scoreMma = null;
+        $scoreBad = null;
+        $soum     = null;
+        $duree    = null;
 
-        try {
-            $winners = [];
-
-            // --- Manche BADMINTON ---
-            if (isset($data['badminton'])) {
-                $b        = $data['badminton'];
-                $scoreMma = Request::intOrNull($b, 'score_mma');
-                $scoreBad = Request::intOrNull($b, 'score_bad');
-                $winBad   = self::computeBadminton($scoreMma, $scoreBad, $mmaId, $badId);
-
-                self::upsertRound($pdo, $id, 'BADMINTON', [
-                    'score_mma'      => $scoreMma,
-                    'score_bad'      => $scoreBad,
-                    'soumission'     => null,
-                    'duree_secondes' => null,
-                    'vainqueur_id'   => $winBad,
-                ]);
-                if ($winBad !== null) {
-                    $winners['BADMINTON'] = $winBad;
-                }
-            }
-
-            // --- Manche MMA ---
-            if (isset($data['mma'])) {
-                $m       = $data['mma'];
-                $soum    = Request::intOrNull($m, 'soumission');
-                $duree   = Request::intOrNull($m, 'duree_secondes');
-                $winMma  = self::computeMma($soum, $mmaId, $badId);
-
-                self::upsertRound($pdo, $id, 'MMA', [
-                    'score_mma'      => null,
-                    'score_bad'      => null,
-                    'soumission'     => $soum,
-                    'duree_secondes' => $duree,
-                    'vainqueur_id'   => $winMma,
-                ]);
-                if ($winMma !== null) {
-                    $winners['MMA'] = $winMma;
-                }
-            }
-
-            // --- Vainqueur global ---
-            $existing = self::roundWinners($pdo, $id);
-            $winners  = array_merge($existing, $winners);
-
-            $vainqueur = self::intOrNullFromBody($data, 'vainqueur_id');
-            $statut    = 'en_cours';
-
-            if (isset($winners['BADMINTON'], $winners['MMA'])) {
-                if ($winners['BADMINTON'] === $winners['MMA']) {
-                    // Même vainqueur sur les 2 manches.
-                    $vainqueur = $winners['BADMINTON'];
-                    $statut    = 'termine';
-                } elseif ($vainqueur !== null) {
-                    // 1-1 : l'admin a désigné le vainqueur de la manche décisive.
-                    $statut = 'termine';
-                }
-            }
-
-            if ($vainqueur !== null
-                && $vainqueur !== $mmaId
-                && $vainqueur !== $badId) {
-                throw new RuntimeException('Vainqueur invalide.');
-            }
-
-            $stmt = $pdo->prepare('UPDATE matches SET vainqueur_id = ?, statut = ? WHERE id = ?');
-            $stmt->execute([$vainqueur, $statut, $id]);
-
-            $pdo->commit();
-        } catch (Throwable $e) {
-            $pdo->rollBack();
-            if ($e instanceof RuntimeException) {
-                Response::error($e->getMessage(), 422);
-            }
-            throw $e;
+        if ($match['discipline'] === 'BADMINTON') {
+            $scoreMma  = Request::intOrNull($data, 'score_mma');
+            $scoreBad  = Request::intOrNull($data, 'score_bad');
+            $vainqueur = self::winnerBadminton($scoreMma, $scoreBad, $mmaId, $badId);
+        } else { // MMA
+            $soum      = Request::intOrNull($data, 'soumission');
+            $duree     = Request::intOrNull($data, 'duree_secondes');
+            $vainqueur = self::winnerMma($soum, $mmaId, $badId);
         }
 
-        Response::json(self::fetchMatches()[0] ?? ['ok' => true]);
+        // Forçage manuel éventuel du vainqueur.
+        if (array_key_exists('vainqueur_id', $data)) {
+            $forced = Request::intOrNull($data, 'vainqueur_id');
+            if ($forced !== null) {
+                self::assertWinnerBelongs($forced, $match);
+                $vainqueur = $forced;
+            }
+        }
+
+        $statut = $vainqueur !== null ? 'termine' : 'en_cours';
+
+        $stmt = Database::get()->prepare(
+            'UPDATE matches
+                SET score_mma = ?, score_bad = ?, soumission = ?, duree_secondes = ?,
+                    vainqueur_id = ?, statut = ?
+              WHERE id = ?'
+        );
+        $stmt->execute([$scoreMma, $scoreBad, $soum, $duree, $vainqueur, $statut, $id]);
+
+        Response::json(['ok' => true, 'vainqueur_id' => $vainqueur, 'statut' => $statut]);
     }
 
     // ------------------------------------------------------------------ //
@@ -190,7 +142,7 @@ final class MatchController
     // ------------------------------------------------------------------ //
 
     /** Badminton : MMA gagne à 11, Badminton gagne à 21. */
-    private static function computeBadminton(?int $scoreMma, ?int $scoreBad, int $mmaId, int $badId): ?int
+    private static function winnerBadminton(?int $scoreMma, ?int $scoreBad, int $mmaId, int $badId): ?int
     {
         if ($scoreMma === null || $scoreBad === null) {
             return null;
@@ -201,11 +153,11 @@ final class MatchController
         if ($scoreMma >= 11 && $scoreMma > $scoreBad) {
             return $mmaId;
         }
-        return null; // Manche non conclue.
+        return null; // Match non conclu.
     }
 
     /** MMA : soumission => le MMA gagne ; pas de soumission (60 s) => le badminton gagne. */
-    private static function computeMma(?int $soumission, int $mmaId, int $badId): ?int
+    private static function winnerMma(?int $soumission, int $mmaId, int $badId): ?int
     {
         if ($soumission === null) {
             return null;
@@ -219,8 +171,9 @@ final class MatchController
 
     private static function fetchMatches(?int $participantId = null): array
     {
-        $sql = 'SELECT m.id, m.ordre, m.statut, m.vainqueur_id,
+        $sql = 'SELECT m.id, m.discipline, m.ordre, m.statut, m.vainqueur_id,
                        m.participant_mma_id, m.participant_bad_id,
+                       m.score_mma, m.score_bad, m.soumission, m.duree_secondes,
                        CONCAT(pm.prenom, " ", pm.nom) AS mma_nom,
                        CONCAT(pb.prenom, " ", pb.nom) AS bad_nom
                 FROM matches m
@@ -236,31 +189,7 @@ final class MatchController
 
         $stmt = Database::get()->prepare($sql);
         $stmt->execute($params);
-        $matches = $stmt->fetchAll();
-
-        if (!$matches) {
-            return [];
-        }
-
-        // Récupération des manches associées.
-        $ids   = array_column($matches, 'id');
-        $place = implode(',', array_fill(0, count($ids), '?'));
-        $rstmt = Database::get()->prepare(
-            "SELECT match_id, type, score_mma, score_bad, soumission, duree_secondes, vainqueur_id
-             FROM match_rounds WHERE match_id IN ($place)"
-        );
-        $rstmt->execute($ids);
-        $roundsByMatch = [];
-        foreach ($rstmt->fetchAll() as $r) {
-            $roundsByMatch[$r['match_id']][$r['type']] = $r;
-        }
-
-        foreach ($matches as &$m) {
-            $m['rounds'] = $roundsByMatch[$m['id']] ?? [];
-        }
-        unset($m);
-
-        return $matches;
+        return $stmt->fetchAll();
     }
 
     private static function findMatch(int $id): array
@@ -287,45 +216,12 @@ final class MatchController
         }
     }
 
-    private static function upsertRound(PDO $pdo, int $matchId, string $type, array $vals): void
+    private static function assertWinnerBelongs(?int $vainqueur, array $match): void
     {
-        $stmt = $pdo->prepare(
-            'INSERT INTO match_rounds (match_id, type, score_mma, score_bad, soumission, duree_secondes, vainqueur_id)
-             VALUES (:match_id, :type, :score_mma, :score_bad, :soumission, :duree, :vainqueur)
-             ON DUPLICATE KEY UPDATE
-                score_mma = VALUES(score_mma),
-                score_bad = VALUES(score_bad),
-                soumission = VALUES(soumission),
-                duree_secondes = VALUES(duree_secondes),
-                vainqueur_id = VALUES(vainqueur_id)'
-        );
-        $stmt->execute([
-            ':match_id'  => $matchId,
-            ':type'      => $type,
-            ':score_mma' => $vals['score_mma'],
-            ':score_bad' => $vals['score_bad'],
-            ':soumission'=> $vals['soumission'],
-            ':duree'     => $vals['duree_secondes'],
-            ':vainqueur' => $vals['vainqueur_id'],
-        ]);
-    }
-
-    /** Retourne les vainqueurs déjà enregistrés par type de manche. */
-    private static function roundWinners(PDO $pdo, int $matchId): array
-    {
-        $stmt = $pdo->prepare('SELECT type, vainqueur_id FROM match_rounds WHERE match_id = ?');
-        $stmt->execute([$matchId]);
-        $out = [];
-        foreach ($stmt->fetchAll() as $r) {
-            if ($r['vainqueur_id'] !== null) {
-                $out[$r['type']] = (int) $r['vainqueur_id'];
-            }
+        if ($vainqueur !== null
+            && $vainqueur !== (int) $match['participant_mma_id']
+            && $vainqueur !== (int) $match['participant_bad_id']) {
+            Response::error('Le vainqueur doit être l\'un des deux pratiquants de l\'affrontement.', 422);
         }
-        return $out;
-    }
-
-    private static function intOrNullFromBody(array $data, string $key): ?int
-    {
-        return Request::intOrNull($data, $key);
     }
 }

@@ -12,6 +12,7 @@ require __DIR__ . '/lib/Auth.php';
 require __DIR__ . '/controllers/AuthController.php';
 require __DIR__ . '/controllers/ParticipantController.php';
 require __DIR__ . '/controllers/MatchController.php';
+require __DIR__ . '/controllers/StatsController.php';
 
 // Chargement de la config (pour les options de cookie).
 $configFile = __DIR__ . '/config.php';
@@ -48,11 +49,13 @@ $routes = [
 
     ['GET',    '#^/matches$#',                 fn() => MatchController::index()],
     ['POST',   '#^/matches$#',                 fn() => MatchController::create()],
-    ['PUT',    '#^/matches/(\d+)/rounds$#',    fn($m) => MatchController::saveRounds((int) $m[1])],
+    ['PUT',    '#^/matches/(\d+)/result$#',    fn($m) => MatchController::saveResult((int) $m[1])],
     ['PUT',    '#^/matches/(\d+)$#',           fn($m) => MatchController::update((int) $m[1])],
     ['DELETE', '#^/matches/(\d+)$#',           fn($m) => MatchController::delete((int) $m[1])],
 
     ['GET',    '#^/me/matches$#',              fn() => MatchController::mine()],
+
+    ['GET',    '#^/stats$#',                   fn() => StatsController::global()],
 ];
 
 foreach ($routes as [$routeMethod, $pattern, $handler]) {

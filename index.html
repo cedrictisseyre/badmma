@@ -9,9 +9,12 @@
 <body>
     <header class="app-header">
         <div class="brand">🏸<span>vs</span>🥊 <strong>Badminton&nbsp;vs&nbsp;MMA</strong></div>
-        <div id="session-info" class="session-info hidden">
-            <span id="session-name"></span>
-            <button id="logout-btn" class="btn btn-ghost">Se déconnecter</button>
+        <div class="header-actions">
+            <button id="nav-scores" class="btn btn-ghost">📊 Scores live</button>
+            <div id="session-info" class="session-info hidden">
+                <span id="session-name"></span>
+                <button id="logout-btn" class="btn btn-ghost">Se déconnecter</button>
+            </div>
         </div>
     </header>
 
@@ -48,6 +51,9 @@
                 </div>
             </div>
             <p id="login-error" class="error hidden"></p>
+            <p class="muted center">
+                <a href="qr.html" target="_blank" rel="noopener">📱 QR code d'accès à imprimer</a>
+            </p>
         </section>
 
         <!-- ============================ ADMIN ============================ -->
@@ -55,6 +61,7 @@
             <nav class="tabs">
                 <button class="tab active" data-tab="participants">Pratiquants</button>
                 <button class="tab" data-tab="matches">Affrontements</button>
+                <button class="tab" data-tab="scores">Scores</button>
             </nav>
 
             <!-- Onglet Pratiquants -->
@@ -86,23 +93,56 @@
 
             <!-- Onglet Affrontements -->
             <div id="tab-matches" class="tab-panel hidden">
-                <div class="card">
-                    <h3>Créer un affrontement</h3>
-                    <form id="match-form" class="form inline">
-                        <label>Pratiquant MMA
-                            <select name="participant_mma_id" required></select>
-                        </label>
-                        <label>Pratiquant Badminton
-                            <select name="participant_bad_id" required></select>
-                        </label>
-                        <label>Ordre <input type="number" name="ordre" value="0" min="0"></label>
-                        <button class="btn btn-primary" type="submit">Créer</button>
-                    </form>
+                <div class="create-grid">
+                    <!-- Formulaire BADMINTON -->
+                    <div class="card create-card create-bad">
+                        <h3>🏸 Affrontement <span class="disc-tag BADMINTON">Badminton</span></h3>
+                        <p class="muted">Pas de smash • MMA gagne à 11 • Badminton gagne à 21</p>
+                        <form id="match-form-bad" class="form" data-discipline="BADMINTON">
+                            <label>Pratiquant MMA
+                                <select name="participant_mma_id" required></select>
+                            </label>
+                            <label>Pratiquant Badminton
+                                <select name="participant_bad_id" required></select>
+                            </label>
+                            <label>Ordre <input type="number" name="ordre" value="0" min="0"></label>
+                            <button class="btn btn-bad" type="submit">Créer l'affrontement badminton</button>
+                        </form>
+                    </div>
+
+                    <!-- Formulaire MMA -->
+                    <div class="card create-card create-mma">
+                        <h3>🥊 Affrontement <span class="disc-tag MMA">MMA</span></h3>
+                        <p class="muted">Badminton a droit aux percussions • gagne s'il n'est pas soumis en 60 s</p>
+                        <form id="match-form-mma" class="form" data-discipline="MMA">
+                            <label>Pratiquant MMA
+                                <select name="participant_mma_id" required></select>
+                            </label>
+                            <label>Pratiquant Badminton
+                                <select name="participant_bad_id" required></select>
+                            </label>
+                            <label>Ordre <input type="number" name="ordre" value="0" min="0"></label>
+                            <button class="btn btn-mma" type="submit">Créer l'affrontement MMA</button>
+                        </form>
+                    </div>
                 </div>
+
                 <div class="card">
-                    <h3>Tableau des affrontements</h3>
+                    <div class="list-head">
+                        <h3>Tableau des affrontements</h3>
+                        <div class="filters">
+                            <button class="chip active" data-filter="ALL">Tous</button>
+                            <button class="chip" data-filter="BADMINTON">🏸 Badminton</button>
+                            <button class="chip" data-filter="MMA">🥊 MMA</button>
+                        </div>
+                    </div>
                     <div id="matches-list" class="matches-list"></div>
                 </div>
+            </div>
+
+            <!-- Onglet Scores (admin) -->
+            <div id="tab-scores" class="tab-panel hidden">
+                <div id="scores-admin"></div>
             </div>
         </section>
 
@@ -113,25 +153,32 @@
                 <div id="my-matches" class="matches-list"></div>
             </div>
         </section>
+
+        <!-- ============================ SCORES (public) ============================ -->
+        <section id="view-scores" class="view hidden">
+            <button id="scores-back" class="btn btn-ghost">← Retour</button>
+            <div id="scores-public"></div>
+        </section>
     </main>
 
-    <!-- Modale de saisie des résultats -->
+    <!-- Modale de saisie du résultat -->
     <div id="result-modal" class="modal hidden">
         <div class="modal-box">
             <button class="modal-close" id="result-close">&times;</button>
-            <h3 id="result-title">Résultats de l'affrontement</h3>
+            <h3 id="result-title">Résultat de l'affrontement</h3>
+            <p id="result-rule" class="rule"></p>
 
-            <div class="round">
-                <h4>Manche 1 — Badminton <span class="rule">MMA gagne à 11 • Badminton gagne à 21 • pas de smash</span></h4>
+            <!-- Bloc BADMINTON -->
+            <div class="round hidden" id="block-bad">
                 <div class="form inline">
-                    <label id="lbl-score-mma">Score MMA <input type="number" id="score-mma" min="0"></label>
-                    <label id="lbl-score-bad">Score Badminton <input type="number" id="score-bad" min="0"></label>
+                    <label>Score MMA <input type="number" id="score-mma" min="0"></label>
+                    <label>Score Badminton <input type="number" id="score-bad" min="0"></label>
                 </div>
                 <p id="bad-winner" class="winner-line"></p>
             </div>
 
-            <div class="round">
-                <h4>Manche 2 — MMA <span class="rule">Badminton a droit aux percussions • gagne s'il n'est pas soumis en 60&nbsp;s</span></h4>
+            <!-- Bloc MMA -->
+            <div class="round hidden" id="block-mma">
                 <div class="timer-block">
                     <div id="timer-display" class="timer">01:00</div>
                     <button class="btn btn-ghost" id="timer-start" type="button">Démarrer</button>
@@ -150,18 +197,9 @@
                 <p id="mma-winner" class="winner-line"></p>
             </div>
 
-            <div class="round decisive hidden" id="decisive-block">
-                <h4>Manche décisive (1-1)</h4>
-                <label>Vainqueur de l'affrontement
-                    <select id="decisive-winner">
-                        <option value="">— Choisir —</option>
-                    </select>
-                </label>
-            </div>
-
             <p id="result-error" class="error hidden"></p>
             <div class="modal-actions">
-                <button class="btn btn-primary" id="result-save">Enregistrer les résultats</button>
+                <button class="btn btn-primary" id="result-save">Enregistrer le résultat</button>
             </div>
         </div>
     </div>

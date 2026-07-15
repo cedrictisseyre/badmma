@@ -5,14 +5,11 @@
 
 SET NAMES utf8mb4;
 
--- On supprime dans l'ordre des dépendances (les cascades le feraient aussi,
--- mais on reste explicite).
-DELETE FROM match_rounds;
+-- On supprime dans l'ordre des dépendances.
 DELETE FROM matches;
 DELETE FROM participants;
 
--- Remise à zéro des compteurs d'auto-incrément (les prochains ID repartent à 1).
-ALTER TABLE match_rounds  AUTO_INCREMENT = 1;
+-- Remise à zéro des compteurs d'auto-increment (les prochains ID repartent à 1).
 ALTER TABLE matches       AUTO_INCREMENT = 1;
 ALTER TABLE participants  AUTO_INCREMENT = 1;
 

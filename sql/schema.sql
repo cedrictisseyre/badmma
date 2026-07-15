@@ -23,25 +23,17 @@ CREATE TABLE IF NOT EXISTS matches (
     id                 INT AUTO_INCREMENT PRIMARY KEY,
     participant_mma_id INT NOT NULL,
     participant_bad_id INT NOT NULL,
+    discipline         ENUM('BADMINTON','MMA') NOT NULL,
     ordre              INT NOT NULL DEFAULT 0,
     statut             ENUM('a_venir','en_cours','termine') NOT NULL DEFAULT 'a_venir',
+    -- Résultat (selon la discipline du match) :
+    score_mma          INT NULL,        -- discipline BADMINTON : points du pratiquant MMA
+    score_bad          INT NULL,        -- discipline BADMINTON : points du pratiquant Badminton
+    soumission         TINYINT(1) NULL, -- discipline MMA : 1 = badminton soumis (MMA gagne)
+    duree_secondes     INT NULL,        -- discipline MMA : durée du combat
     vainqueur_id       INT NULL,
     created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_match_mma FOREIGN KEY (participant_mma_id) REFERENCES participants(id) ON DELETE CASCADE,
     CONSTRAINT fk_match_bad FOREIGN KEY (participant_bad_id) REFERENCES participants(id) ON DELETE CASCADE,
     CONSTRAINT fk_match_vainqueur FOREIGN KEY (vainqueur_id) REFERENCES participants(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS match_rounds (
-    id             INT AUTO_INCREMENT PRIMARY KEY,
-    match_id       INT NOT NULL,
-    type           ENUM('BADMINTON','MMA') NOT NULL,
-    score_mma      INT NULL,
-    score_bad      INT NULL,
-    soumission     TINYINT(1) NULL,          -- 1 = le badminton a été soumis, 0 = non soumis
-    duree_secondes INT NULL,                 -- durée de la manche MMA
-    vainqueur_id   INT NULL,
-    UNIQUE KEY uq_round (match_id, type),
-    CONSTRAINT fk_round_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
-    CONSTRAINT fk_round_vainqueur FOREIGN KEY (vainqueur_id) REFERENCES participants(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

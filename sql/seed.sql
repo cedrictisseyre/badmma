@@ -18,6 +18,8 @@ INSERT INTO participants (nom, prenom, categorie) VALUES
     ('Garcia',  'Lucas',  'BADMINTON'),
     ('Roux',    'Emma',   'BADMINTON');
 
--- Un affrontement de démonstration (Marc Durand MMA vs Sophie Lefevre BADMINTON)
-INSERT INTO matches (participant_mma_id, participant_bad_id, ordre, statut)
-VALUES (1, 4, 1, 'a_venir');
+-- Deux affrontements de démonstration (disciplines distinctes).
+INSERT INTO matches (participant_mma_id, participant_bad_id, discipline, ordre, statut)
+VALUES
+    (1, 4, 'BADMINTON', 1, 'a_venir'),
+    (2, 5, 'MMA',       2, 'a_venir');
