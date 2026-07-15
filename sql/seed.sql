@@ -5,10 +5,12 @@
 SET NAMES utf8mb4;
 
 INSERT INTO admins (username, password_hash) VALUES
-    ('admin', '$2y$10$ZJJ2EPlIbhTGwubCMYsNu.1A1H3gsls6wnFNXHN8tNfNnwaLuTbKm');
--- ^ Si ce hash ne fonctionne pas sur votre PHP, régénérez-le avec :
+    ('admin', '$2y$10$ZJJ2EPlIbhTGwubCMYsNu.1A1H3gsls6wnFNXHN8tNfNnwaLuTbKm')
+ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash);
+-- ^ Idempotent : si l'admin existe déjà, on met simplement à jour son hash
+--   (évite l'erreur #1062 « Duplicata du champ 'admin' » en relançant le seed).
+-- Si ce hash ne fonctionne pas sur votre PHP, régénérez-le avec :
 --   php -r "echo password_hash('admin123', PASSWORD_DEFAULT), PHP_EOL;"
--- puis remplacez la valeur ci-dessus.
 
 INSERT INTO participants (nom, prenom, categorie) VALUES
     ('Durand',  'Marc',   'MMA'),

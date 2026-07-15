@@ -15,7 +15,7 @@
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
 
-    const state = { session: null, participants: [] };
+    const state = { session: null, participants: [], matches: [], matchFilter: 'ALL' };
 
     function showView(id) {
         $$('.view').forEach((v) => v.classList.add('hidden'));
@@ -48,6 +48,7 @@
     }
 
     function route() {
+        stopScoresPolling();
         showSessionInfo();
         if (!state.session || !state.session.role) {
             showView('view-login');
@@ -70,6 +71,9 @@
             route();
         });
 
+        $('#nav-scores').addEventListener('click', openScores);
+        $('#scores-back').addEventListener('click', route);
+
         $('#admin-login-form').addEventListener('submit', onAdminLogin);
         $('#participant-login-form').addEventListener('submit', onParticipantLogin);
 
@@ -79,19 +83,38 @@
             tab.classList.add('active');
             $$('.tab-panel').forEach((p) => p.classList.add('hidden'));
             $(`#tab-${tab.dataset.tab}`).classList.remove('hidden');
+            if (tab.dataset.tab === 'scores') {
+                startScoresPolling($('#scores-admin'));
+            } else {
+                stopScoresPolling();
+            }
         }));
 
         $('#participant-form').addEventListener('submit', onSaveParticipant);
         $('#participant-cancel').addEventListener('click', resetParticipantForm);
-        $('#match-form').addEventListener('submit', onCreateMatch);
+        $('#match-form-bad').addEventListener('submit', onCreateMatch);
+        $('#match-form-mma').addEventListener('submit', onCreateMatch);
 
-        // Modale résultats
+        // Filtres de discipline
+        $$('.chip').forEach((c) => c.addEventListener('click', () => {
+            $$('.chip').forEach((x) => x.classList.remove('active'));
+            c.classList.add('active');
+            state.matchFilter = c.dataset.filter;
+            renderMatches(state.matches, $('#matches-list'), true);
+        }));
+
+        // Modale résultat
         $('#result-close').addEventListener('click', closeResultModal);
         $('#score-mma').addEventListener('input', refreshBadWinnerHint);
         $('#score-bad').addEventListener('input', refreshBadWinnerHint);
         $('#mma-soumission').addEventListener('change', refreshMmaWinnerHint);
-        $('#result-save').addEventListener('click', onSaveRounds);
+        $('#result-save').addEventListener('click', onSaveResult);
         bindTimer();
+    }
+
+    function openScores() {
+        showView('view-scores');
+        startScoresPolling($('#scores-public'));
     }
 
     // ------------------------------------------------------------------ //
