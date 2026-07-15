@@ -3,7 +3,10 @@
  * Gère le token CSRF et l'envoi/réception JSON.
  */
 const Api = (() => {
-    const BASE = 'api';
+    // On cible directement le fichier PHP réel et on passe la route en paramètre.
+    // Cela fonctionne sur n'importe quelle configuration Nginx/PHP-FPM,
+    // sans dépendre d'une règle de réécriture d'URL.
+    const BASE = 'api/index.php';
     let csrf = '';
 
     function setCsrf(token) { csrf = token || ''; }
@@ -13,7 +16,8 @@ const Api = (() => {
         if (method !== 'GET' && csrf) {
             headers['X-CSRF-Token'] = csrf;
         }
-        const res = await fetch(`${BASE}${path}`, {
+        const url = `${BASE}?r=${encodeURIComponent(path)}`;
+        const res = await fetch(url, {
             method,
             headers,
             credentials: 'same-origin',

@@ -21,9 +21,18 @@ Auth::start((bool) ($config['secure_cookies'] ?? false));
 
 // Détermination de la route.
 $method = $_SERVER['REQUEST_METHOD'];
-$uri    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
-$path   = preg_replace('#^.*/api#', '', $uri);   // on isole ce qui suit /api
-$path   = '/' . trim($path, '/');
+
+// Deux modes supportés :
+//  1. Paramètre ?r=/auth/me (robuste, fonctionne avec toute config Nginx/PHP).
+//  2. URL propre /api/auth/me (nécessite une réécriture Nginx vers /api/index.php).
+if (isset($_GET['r'])) {
+    $path = '/' . trim((string) $_GET['r'], '/');
+} else {
+    $uri  = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
+    // On isole ce qui suit /api (et un éventuel /index.php).
+    $path = preg_replace('#^.*/api(?:/index\.php)?#', '', $uri);
+    $path = '/' . trim((string) $path, '/');
+}
 
 // Table de routage : [méthode, regex] => callable
 $routes = [
