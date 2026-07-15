@@ -415,7 +415,7 @@
 
         $('#result-title').textContent = `${currentMatch.mma_nom} (MMA) vs ${currentMatch.bad_nom} (Bad)`;
         $('#result-rule').textContent = isBad
-            ? '🏸 Badminton — pas de smash • MMA gagne à 11 • Badminton gagne à 21'
+            ? '🏸 Badminton — pas de smash • le premier à 11 points gagne'
             : "🥊 MMA — le badminton gagne s'il n'est pas soumis en 60 s ; sinon le MMA gagne par soumission";
         $('#result-error').classList.add('hidden');
 
@@ -447,12 +447,9 @@
         const sm = parseInt($('#score-mma').value, 10);
         const sb = parseInt($('#score-bad').value, 10);
         if (Number.isNaN(sm) || Number.isNaN(sb)) return null;
-        const badWon = sb >= 21;
-        const mmaWon = sm >= 11;
-        if (badWon && mmaWon) return (sb / 21) >= (sm / 11) ? 'BAD' : 'MMA';
-        if (badWon) return 'BAD';
-        if (mmaWon) return 'MMA';
-        return null;
+        if (sm < 11 && sb < 11) return null; // personne n'a atteint 11
+        if (sm === sb) return null;          // égalité
+        return sm > sb ? 'MMA' : 'BAD';      // le premier à 11 = score le plus élevé
     }
 
     function computeMmaWinner() {

@@ -168,27 +168,22 @@ final class MatchController
     // Logique métier
     // ------------------------------------------------------------------ //
 
-    /** Badminton : MMA gagne dès 11 points, Badminton dès 21 points (course avec handicap). */
+    /** Badminton : le premier à 11 points gagne (le score le plus élevé l'emporte). */
     private static function winnerBadminton(?int $scoreMma, ?int $scoreBad, int $mmaId, int $badId): ?int
     {
         if ($scoreMma === null || $scoreBad === null) {
             return null;
         }
-        $badWon = $scoreBad >= 21;
-        $mmaWon = $scoreMma >= 11;
-
-        if ($badWon && $mmaWon) {
-            // Cas ambigu (les deux objectifs atteints) : on départage par la
-            // progression relative à l'objectif de chacun.
-            return ($scoreBad / 21) >= ($scoreMma / 11) ? $badId : $mmaId;
+        // Personne n'a encore atteint 11 : match non conclu.
+        if ($scoreMma < 11 && $scoreBad < 11) {
+            return null;
         }
-        if ($badWon) {
-            return $badId;
+        // Égalité : non conclu (départage nécessaire).
+        if ($scoreMma === $scoreBad) {
+            return null;
         }
-        if ($mmaWon) {
-            return $mmaId;
-        }
-        return null; // Objectif non atteint : match non conclu.
+        // Le premier à 11 est celui qui a le score le plus élevé.
+        return $scoreMma > $scoreBad ? $mmaId : $badId;
     }
 
     /** MMA : soumission => le MMA gagne ; pas de soumission (60 s) => le badminton gagne. */
