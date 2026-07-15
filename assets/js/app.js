@@ -333,25 +333,27 @@
     let currentMatch = null;
 
     function openResultModal(id) {
-        currentMatch = (window.__matches || []).find((m) => Number(m.id) === id);
+        currentMatch = state.matches.find((m) => Number(m.id) === id);
         if (!currentMatch) return;
+        const isBad = currentMatch.discipline === 'BADMINTON';
 
         $('#result-title').textContent = `${currentMatch.mma_nom} (MMA) vs ${currentMatch.bad_nom} (Bad)`;
+        $('#result-rule').textContent = isBad
+            ? '🏸 Badminton — pas de smash • MMA gagne à 11 • Badminton gagne à 21'
+            : "🥊 MMA — le badminton gagne s'il n'est pas soumis en 60 s ; sinon le MMA gagne par soumission";
         $('#result-error').classList.add('hidden');
 
-        const bad = currentMatch.rounds.BADMINTON || {};
-        const mma = currentMatch.rounds.MMA || {};
-        $('#score-mma').value = bad.score_mma ?? '';
-        $('#score-bad').value = bad.score_bad ?? '';
-        $('#mma-soumission').value = mma.soumission === null || mma.soumission === undefined ? '' : String(mma.soumission);
-        $('#mma-duree').value = mma.duree_secondes ?? '';
+        $('#block-bad').classList.toggle('hidden', !isBad);
+        $('#block-mma').classList.toggle('hidden', isBad);
 
-        // Manche décisive
-        const dec = $('#decisive-winner');
-        dec.innerHTML = `<option value="">— Choisir —</option>
-            <option value="${currentMatch.participant_mma_id}">${esc(currentMatch.mma_nom)} (MMA)</option>
-            <option value="${currentMatch.participant_bad_id}">${esc(currentMatch.bad_nom)} (Bad)</option>`;
-        dec.value = currentMatch.vainqueur_id ?? '';
+        if (isBad) {
+            $('#score-mma').value = currentMatch.score_mma ?? '';
+            $('#score-bad').value = currentMatch.score_bad ?? '';
+        } else {
+            const s = currentMatch.soumission;
+            $('#mma-soumission').value = (s === null || s === undefined) ? '' : String(s);
+            $('#mma-duree').value = currentMatch.duree_secondes ?? '';
+        }
 
         resetTimer();
         refreshBadWinnerHint();
@@ -381,51 +383,39 @@
     }
 
     function refreshBadWinnerHint() {
+        if (!currentMatch) return;
         const w = computeBadWinner();
         $('#bad-winner').textContent = w
-            ? `Vainqueur manche badminton : ${w === 'MMA' ? currentMatch.mma_nom : currentMatch.bad_nom}`
+            ? `Vainqueur : ${w === 'MMA' ? currentMatch.mma_nom : currentMatch.bad_nom}`
             : '';
-        updateDecisiveVisibility();
     }
 
     function refreshMmaWinnerHint() {
+        if (!currentMatch) return;
         const w = computeMmaWinner();
         $('#mma-winner').textContent = w
-            ? `Vainqueur manche MMA : ${w === 'MMA' ? currentMatch.mma_nom : currentMatch.bad_nom}`
+            ? `Vainqueur : ${w === 'MMA' ? currentMatch.mma_nom : currentMatch.bad_nom}`
             : '';
-        updateDecisiveVisibility();
     }
 
-    function updateDecisiveVisibility() {
-        const b = computeBadWinner();
-        const m = computeMmaWinner();
-        const needDecisive = b && m && b !== m;
-        $('#decisive-block').classList.toggle('hidden', !needDecisive);
-    }
-
-    async function onSaveRounds() {
+    async function onSaveResult() {
+        if (!currentMatch) return;
+        const isBad = currentMatch.discipline === 'BADMINTON';
         const payload = {};
-        const sm = $('#score-mma').value;
-        const sb = $('#score-bad').value;
-        if (sm !== '' || sb !== '') {
-            payload.badminton = { score_mma: sm === '' ? null : Number(sm), score_bad: sb === '' ? null : Number(sb) };
-        }
-        const soum = $('#mma-soumission').value;
-        if (soum !== '') {
-            payload.mma = { soumission: Number(soum), duree_secondes: $('#mma-duree').value === '' ? null : Number($('#mma-duree').value) };
-        }
-        const b = computeBadWinner();
-        const m = computeMmaWinner();
-        if (b && m && b !== m) {
-            const dec = $('#decisive-winner').value;
-            if (!dec) {
-                return resultError('Match nul 1-1 : veuillez désigner le vainqueur de la manche décisive.');
-            }
-            payload.vainqueur_id = Number(dec);
+
+        if (isBad) {
+            const sm = $('#score-mma').value;
+            const sb = $('#score-bad').value;
+            payload.score_mma = sm === '' ? null : Number(sm);
+            payload.score_bad = sb === '' ? null : Number(sb);
+        } else {
+            const soum = $('#mma-soumission').value;
+            payload.soumission = soum === '' ? null : Number(soum);
+            payload.duree_secondes = $('#mma-duree').value === '' ? null : Number($('#mma-duree').value);
         }
 
         try {
-            await Api.saveRounds(currentMatch.id, payload);
+            await Api.saveResult(currentMatch.id, payload);
             closeResultModal();
             await loadMatches();
         } catch (err) { resultError(err.message); }
@@ -491,6 +481,67 @@
     async function loadParticipantView() {
         const matches = await Api.myMatches();
         renderMatches(matches, $('#my-matches'), false);
+    }
+
+    // ------------------------------------------------------------------ //
+    // Scores globaux (live)
+    // ------------------------------------------------------------------ //
+    let scoresTimer = null;
+
+    function startScoresPolling(container) {
+        stopScoresPolling();
+        const tick = async () => {
+            try {
+                const s = await Api.stats();
+                renderScores(s, container);
+            } catch (err) {
+                container.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+            }
+        };
+        tick();
+        scoresTimer = setInterval(tick, 5000);
+    }
+
+    function stopScoresPolling() {
+        if (scoresTimer) { clearInterval(scoresTimer); scoresTimer = null; }
+    }
+
+    function renderScores(s, container) {
+        const bad = s.victoires.badminton;
+        const mma = s.victoires.mma;
+        const total = bad + mma;
+        const badPct = total ? Math.round((bad / total) * 100) : 50;
+        const mmaPct = 100 - badPct;
+
+        container.innerHTML = `
+            <div class="scoreboard">
+                <div class="score-camp bad">
+                    <div class="score-emoji">🏸</div>
+                    <div class="score-num">${bad}</div>
+                    <div class="score-label">Victoires Badminton</div>
+                </div>
+                <div class="score-vs">VS</div>
+                <div class="score-camp mma">
+                    <div class="score-emoji">🥊</div>
+                    <div class="score-num">${mma}</div>
+                    <div class="score-label">Victoires MMA</div>
+                </div>
+            </div>
+            <div class="score-bar">
+                <div class="score-bar-bad" style="width:${badPct}%"></div>
+                <div class="score-bar-mma" style="width:${mmaPct}%"></div>
+            </div>
+            <div class="score-details">
+                <div class="card mini">
+                    <h4>🏸 Discipline Badminton</h4>
+                    <p>${s.disciplines.BADMINTON.termine} terminé(s) / ${s.disciplines.BADMINTON.total} match(s)</p>
+                </div>
+                <div class="card mini">
+                    <h4>🥊 Discipline MMA</h4>
+                    <p>${s.disciplines.MMA.termine} terminé(s) / ${s.disciplines.MMA.total} match(s)</p>
+                </div>
+            </div>
+            <p class="muted center">Mise à jour automatique toutes les 5 s • ${s.total_matches} affrontement(s) au total</p>`;
     }
 
     init();

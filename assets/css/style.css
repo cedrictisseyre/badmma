@@ -148,3 +148,57 @@ main { max-width: 1080px; margin: 2rem auto; padding: 0 1rem; }
 
 /* Messages */
 .error { color: var(--danger); font-size: .9rem; margin-top: 1rem; }
+
+/* Header actions */
+.header-actions { display: flex; align-items: center; gap: 1rem; }
+.center { text-align: center; }
+
+/* Création d'affrontement (2 disciplines) */
+.create-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; margin-bottom: 1.4rem; }
+@media (max-width: 720px) { .create-grid { grid-template-columns: 1fr; } }
+.create-card { border-top: 4px solid transparent; }
+.create-bad { border-top-color: var(--accent-bad); }
+.create-mma { border-top-color: var(--accent-mma); }
+
+.disc-tag { padding: .15rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+.disc-tag.BADMINTON { background: rgba(0,184,148,.18); color: var(--accent-bad); }
+.disc-tag.MMA { background: rgba(225,112,85,.18); color: var(--accent-mma); }
+
+.btn-bad { background: linear-gradient(135deg, #00b894, #0acaa0); color: #04231c; }
+.btn-mma { background: linear-gradient(135deg, #e17055, #f0916f); color: #2a0f07; }
+.btn-bad:hover, .btn-mma:hover { filter: brightness(1.08); }
+
+/* Liste : entête + filtres */
+.list-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .8rem; }
+.filters { display: flex; gap: .4rem; }
+.chip {
+    background: var(--surface-2); color: var(--muted);
+    border: 1px solid rgba(255,255,255,.08);
+    padding: .35rem .8rem; border-radius: 999px; cursor: pointer; font-size: .82rem; font-weight: 600;
+}
+.chip.active { background: var(--primary); color: #fff; border-color: transparent; }
+
+/* Bordure de discipline sur les cartes de match */
+.match.is-bad { border-left: 4px solid var(--accent-bad); }
+.match.is-mma { border-left: 4px solid var(--accent-mma); }
+.match-rounds { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+
+/* Tableau des scores */
+.scoreboard { display: flex; align-items: stretch; gap: 1rem; margin-bottom: 1rem; }
+.score-camp { flex: 1; text-align: center; padding: 1.6rem 1rem; border-radius: var(--radius); box-shadow: var(--shadow); }
+.score-camp.bad { background: linear-gradient(160deg, rgba(0,184,148,.22), rgba(0,184,148,.06)); border: 1px solid rgba(0,184,148,.35); }
+.score-camp.mma { background: linear-gradient(160deg, rgba(225,112,85,.22), rgba(225,112,85,.06)); border: 1px solid rgba(225,112,85,.35); }
+.score-emoji { font-size: 2.4rem; }
+.score-num { font-size: 3.4rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.score-label { color: var(--muted); font-size: .9rem; margin-top: .3rem; }
+.score-vs { align-self: center; color: var(--muted); font-weight: 800; font-size: 1.1rem; }
+
+.score-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--surface-2); margin-bottom: 1.4rem; }
+.score-bar-bad { background: var(--accent-bad); transition: width .5s ease; }
+.score-bar-mma { background: var(--accent-mma); transition: width .5s ease; }
+
+.score-details { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 560px) { .score-details { grid-template-columns: 1fr; } .scoreboard { flex-direction: column; } }
+.card.mini { margin: 0; padding: 1rem 1.2rem; }
+.card.mini h4 { margin: 0 0 .4rem; }
+.card.mini p { margin: 0; color: var(--muted); }

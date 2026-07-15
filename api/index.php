@@ -60,7 +60,12 @@ $routes = [
 
 foreach ($routes as [$routeMethod, $pattern, $handler]) {
     if ($routeMethod === $method && preg_match($pattern, $path, $matches)) {
-        $handler($matches);
+        try {
+            $handler($matches);
+        } catch (Throwable $e) {
+            // Message détaillé pour faciliter le diagnostic pendant la mise en place.
+            Response::error('Erreur serveur : ' . $e->getMessage(), 500);
+        }
         exit;
     }
 }

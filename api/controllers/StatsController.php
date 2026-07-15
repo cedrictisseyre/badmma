@@ -17,7 +17,7 @@ final class StatsController
             'SELECT p.categorie AS camp, COUNT(*) AS n
              FROM matches m
              JOIN participants p ON p.id = m.vainqueur_id
-             WHERE m.statut = "termine" AND m.vainqueur_id IS NOT NULL
+             WHERE m.statut = \'termine\' AND m.vainqueur_id IS NOT NULL
              GROUP BY p.categorie'
         );
         foreach ($stmt->fetchAll() as $r) {
@@ -32,7 +32,7 @@ final class StatsController
         $stmt = $pdo->query(
             'SELECT discipline,
                     COUNT(*) AS total,
-                    SUM(statut = "termine") AS termine
+                    SUM(statut = \'termine\') AS termine
              FROM matches
              GROUP BY discipline'
         );

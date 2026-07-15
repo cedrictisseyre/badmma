@@ -41,7 +41,7 @@ final class MatchController
 
         $stmt = Database::get()->prepare(
             'INSERT INTO matches (participant_mma_id, participant_bad_id, discipline, ordre, statut)
-             VALUES (?, ?, ?, ?, "a_venir")'
+             VALUES (?, ?, ?, ?, \'a_venir\')'
         );
         $stmt->execute([$mma, $bad, $discipline, $ordre]);
         Response::json(['id' => (int) Database::get()->lastInsertId()], 201);
@@ -174,8 +174,8 @@ final class MatchController
         $sql = 'SELECT m.id, m.discipline, m.ordre, m.statut, m.vainqueur_id,
                        m.participant_mma_id, m.participant_bad_id,
                        m.score_mma, m.score_bad, m.soumission, m.duree_secondes,
-                       CONCAT(pm.prenom, " ", pm.nom) AS mma_nom,
-                       CONCAT(pb.prenom, " ", pb.nom) AS bad_nom
+                       CONCAT(pm.prenom, \' \', pm.nom) AS mma_nom,
+                       CONCAT(pb.prenom, \' \', pb.nom) AS bad_nom
                 FROM matches m
                 JOIN participants pm ON pm.id = m.participant_mma_id
                 JOIN participants pb ON pb.id = m.participant_bad_id';
