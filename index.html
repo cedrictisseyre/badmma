@@ -170,9 +170,25 @@
 
             <!-- Bloc BADMINTON -->
             <div class="round hidden" id="block-bad">
-                <div class="form inline">
-                    <label>Score MMA <input type="number" id="score-mma" min="0"></label>
-                    <label>Score Badminton <input type="number" id="score-bad" min="0"></label>
+                <div class="score-pickers">
+                    <div class="picker">
+                        <span class="picker-label">Score MMA</span>
+                        <div class="stepper">
+                            <button type="button" class="step" data-target="score-mma" data-delta="-1">−</button>
+                            <input type="number" id="score-mma" min="0" value="0" inputmode="numeric">
+                            <button type="button" class="step" data-target="score-mma" data-delta="1">+</button>
+                        </div>
+                        <button type="button" class="quick-btn" data-target="score-mma" data-set="11">Victoire (11)</button>
+                    </div>
+                    <div class="picker">
+                        <span class="picker-label">Score Badminton</span>
+                        <div class="stepper">
+                            <button type="button" class="step" data-target="score-bad" data-delta="-1">−</button>
+                            <input type="number" id="score-bad" min="0" value="0" inputmode="numeric">
+                            <button type="button" class="step" data-target="score-bad" data-delta="1">+</button>
+                        </div>
+                        <button type="button" class="quick-btn" data-target="score-bad" data-set="21">Victoire (21)</button>
+                    </div>
                 </div>
                 <p id="bad-winner" class="winner-line"></p>
             </div>

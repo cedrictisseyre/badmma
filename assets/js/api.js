@@ -51,6 +51,7 @@ const Api = (() => {
         createMatch: (m) => request('POST', '/matches', m),
         updateMatch: (id, m) => request('PUT', `/matches/${id}`, m),
         deleteMatch: (id) => request('DELETE', `/matches/${id}`),
+        reorderMatches: (ids) => request('PUT', '/matches/reorder', { order: ids }),
         saveResult: (id, payload) => request('PUT', `/matches/${id}/result`, payload),
 
         myMatches: () => request('GET', '/me/matches'),

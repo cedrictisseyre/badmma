@@ -109,6 +109,19 @@
         $('#score-bad').addEventListener('input', refreshBadWinnerHint);
         $('#mma-soumission').addEventListener('change', refreshMmaWinnerHint);
         $('#result-save').addEventListener('click', onSaveResult);
+
+        // Boutons +/- et raccourcis de score (badminton)
+        $$('#block-bad .step').forEach((b) => b.addEventListener('click', () => {
+            const input = $('#' + b.dataset.target);
+            const v = parseInt(input.value, 10) || 0;
+            input.value = Math.max(0, v + Number(b.dataset.delta));
+            refreshBadWinnerHint();
+        }));
+        $$('#block-bad .quick-btn').forEach((b) => b.addEventListener('click', () => {
+            $('#' + b.dataset.target).value = b.dataset.set;
+            refreshBadWinnerHint();
+        }));
+
         bindTimer();
     }
 
@@ -266,7 +279,12 @@
             container.innerHTML = '<p class="muted">Aucun affrontement.</p>';
             return;
         }
-        container.innerHTML = list.map((m) => matchCard(m, isAdmin)).join('');
+        const canDrag = isAdmin && filter === 'ALL';
+        container.innerHTML =
+            (isAdmin ? `<p class="muted drag-hint">${canDrag
+                ? '↕ Glissez-déposez les affrontements pour changer leur ordre.'
+                : 'Passez le filtre sur « Tous » pour réordonner par glisser-déposer.'}</p>` : '')
+            + list.map((m) => matchCard(m, isAdmin, canDrag)).join('');
 
         if (isAdmin) {
             $$('[data-result]', container).forEach((b) =>
@@ -274,9 +292,12 @@
             $$('[data-delmatch]', container).forEach((b) =>
                 b.addEventListener('click', () => removeMatch(Number(b.dataset.delmatch))));
         }
+        if (canDrag) {
+            enableDragAndDrop(container);
+        }
     }
 
-    function matchCard(m, isAdmin) {
+    function matchCard(m, isAdmin, canDrag) {
         const winMma = m.vainqueur_id && Number(m.vainqueur_id) === Number(m.participant_mma_id);
         const winBad = m.vainqueur_id && Number(m.vainqueur_id) === Number(m.participant_bad_id);
         const statutLabel = { a_venir: 'À venir', en_cours: 'En cours', termine: 'Terminé' }[m.statut];
@@ -298,9 +319,10 @@
         }
 
         return `
-            <div class="match ${isBad ? 'is-bad' : 'is-mma'}">
+            <div class="match ${isBad ? 'is-bad' : 'is-mma'}" data-id="${m.id}" ${canDrag ? 'draggable="true"' : ''}>
                 <div class="match-head">
                     <div class="fighters">
+                        ${canDrag ? '<span class="drag-handle" title="Glisser pour réordonner">⠿</span>' : ''}
                         <span class="badge MMA">MMA</span>
                         <span class="fighter ${winMma ? 'win' : ''}">${esc(m.mma_nom)}</span>
                         <span class="vs">VS</span>
@@ -319,6 +341,60 @@
                     <button class="btn btn-danger btn-sm" data-delmatch="${m.id}">Supprimer</button>
                 </div>` : ''}
             </div>`;
+    }
+
+    // Glisser-déposer pour réordonner les affrontements.
+    let dragged = null;
+
+    function enableDragAndDrop(container) {
+        $$('.match[draggable="true"]', container).forEach((card) => {
+            card.addEventListener('dragstart', () => {
+                dragged = card;
+                card.classList.add('dragging');
+            });
+            card.addEventListener('dragend', async () => {
+                card.classList.remove('dragging');
+                dragged = null;
+                await persistOrder(container);
+            });
+        });
+
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!dragged) return;
+            const after = getDragAfterElement(container, e.clientY);
+            if (after == null) {
+                container.appendChild(dragged);
+            } else {
+                container.insertBefore(dragged, after);
+            }
+        });
+    }
+
+    function getDragAfterElement(container, y) {
+        const cards = $$('.match[draggable="true"]:not(.dragging)', container);
+        let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+        cards.forEach((card) => {
+            const box = card.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                closest = { offset, element: card };
+            }
+        });
+        return closest.element;
+    }
+
+    async function persistOrder(container) {
+        const ids = $$('.match[data-id]', container).map((c) => Number(c.dataset.id));
+        if (!ids.length) return;
+        try {
+            await Api.reorderMatches(ids);
+            // Réaligne le cache local sur le nouvel ordre.
+            state.matches.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+        } catch (err) {
+            alert(err.message);
+            await loadMatches();
+        }
     }
 
     async function removeMatch(id) {

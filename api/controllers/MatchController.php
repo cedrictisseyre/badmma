@@ -84,6 +84,33 @@ final class MatchController
         Response::json(['ok' => true]);
     }
 
+    /** Réordonne les affrontements : { order: [id1, id2, ...] }. */
+    public static function reorder(): void
+    {
+        Auth::requireAdmin();
+        Auth::requireCsrf();
+
+        $data = Request::body();
+        $ids  = $data['order'] ?? null;
+        if (!is_array($ids) || $ids === []) {
+            Response::error('Liste d\'ordre invalide.', 422);
+        }
+
+        $pdo = Database::get();
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare('UPDATE matches SET ordre = ? WHERE id = ?');
+            foreach (array_values($ids) as $i => $id) {
+                $stmt->execute([$i, (int) $id]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        Response::json(['ok' => true]);
+    }
+
     /**
      * Saisie du résultat d'un match, selon sa discipline.
      *   BADMINTON : { score_mma, score_bad }

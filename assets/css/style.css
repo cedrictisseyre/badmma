@@ -202,3 +202,34 @@ main { max-width: 1080px; margin: 2rem auto; padding: 0 1rem; }
 .card.mini { margin: 0; padding: 1rem 1.2rem; }
 .card.mini h4 { margin: 0 0 .4rem; }
 .card.mini p { margin: 0; color: var(--muted); }
+
+/* Glisser-déposer */
+.drag-hint { margin: 0 0 .8rem; }
+.match[draggable="true"] { cursor: grab; }
+.match.dragging { opacity: .5; outline: 2px dashed var(--primary); }
+.drag-handle { color: var(--muted); cursor: grab; font-size: 1.1rem; user-select: none; }
+
+/* Sélecteurs de score (picker) */
+.score-pickers { display: flex; gap: 1.4rem; flex-wrap: wrap; }
+.picker { display: flex; flex-direction: column; gap: .5rem; align-items: flex-start; }
+.picker-label { color: var(--muted); font-size: .85rem; }
+.stepper { display: flex; align-items: center; gap: .4rem; }
+.stepper .step {
+    width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12);
+    background: var(--surface-2); color: var(--text); font-size: 1.3rem; font-weight: 700; cursor: pointer;
+    line-height: 1;
+}
+.stepper .step:hover { background: var(--primary); border-color: transparent; }
+.stepper input {
+    width: 74px; text-align: center; font-size: 1.4rem; font-weight: 700;
+    background: var(--surface-2); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px; color: var(--text); padding: .4rem; -moz-appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button,
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.quick-btn {
+    background: var(--surface-2); color: var(--muted);
+    border: 1px solid rgba(255,255,255,.1); border-radius: 999px;
+    padding: .3rem .7rem; font-size: .78rem; font-weight: 600; cursor: pointer;
+}
+.quick-btn:hover { color: var(--text); border-color: var(--primary); }

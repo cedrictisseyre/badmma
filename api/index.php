@@ -49,6 +49,7 @@ $routes = [
 
     ['GET',    '#^/matches$#',                 fn() => MatchController::index()],
     ['POST',   '#^/matches$#',                 fn() => MatchController::create()],
+    ['PUT',    '#^/matches/reorder$#',         fn() => MatchController::reorder()],
     ['PUT',    '#^/matches/(\d+)/result$#',    fn($m) => MatchController::saveResult((int) $m[1])],
     ['PUT',    '#^/matches/(\d+)$#',           fn($m) => MatchController::update((int) $m[1])],
     ['DELETE', '#^/matches/(\d+)$#',           fn($m) => MatchController::delete((int) $m[1])],
