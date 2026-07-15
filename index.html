@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Badminton vs MMA — Gestion de la compétition</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="brand">🏸<span>vs</span>🥊 <strong>Badminton&nbsp;vs&nbsp;MMA</strong></div>
+        <div id="session-info" class="session-info hidden">
+            <span id="session-name"></span>
+            <button id="logout-btn" class="btn btn-ghost">Se déconnecter</button>
+        </div>
+    </header>
+
+    <main id="app">
+
+        <!-- ============================ CONNEXION ============================ -->
+        <section id="view-login" class="view">
+            <div class="login-grid">
+                <div class="card">
+                    <h2>Espace administrateur</h2>
+                    <form id="admin-login-form" class="form">
+                        <label>Identifiant
+                            <input type="text" name="username" autocomplete="username" required>
+                        </label>
+                        <label>Mot de passe
+                            <input type="password" name="password" autocomplete="current-password" required>
+                        </label>
+                        <button class="btn btn-primary" type="submit">Connexion admin</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Espace pratiquant</h2>
+                    <p class="muted">Connectez-vous avec votre nom et prénom.</p>
+                    <form id="participant-login-form" class="form">
+                        <label>Nom
+                            <input type="text" name="nom" required>
+                        </label>
+                        <label>Prénom
+                            <input type="text" name="prenom" required>
+                        </label>
+                        <button class="btn btn-primary" type="submit">Voir mes affrontements</button>
+                    </form>
+                </div>
+            </div>
+            <p id="login-error" class="error hidden"></p>
+        </section>
+
+        <!-- ============================ ADMIN ============================ -->
+        <section id="view-admin" class="view hidden">
+            <nav class="tabs">
+                <button class="tab active" data-tab="participants">Pratiquants</button>
+                <button class="tab" data-tab="matches">Affrontements</button>
+            </nav>
+
+            <!-- Onglet Pratiquants -->
+            <div id="tab-participants" class="tab-panel">
+                <div class="card">
+                    <h3>Ajouter un pratiquant</h3>
+                    <form id="participant-form" class="form inline">
+                        <input type="hidden" name="id">
+                        <label>Nom <input type="text" name="nom" required></label>
+                        <label>Prénom <input type="text" name="prenom" required></label>
+                        <label>Catégorie
+                            <select name="categorie" required>
+                                <option value="MMA">MMA</option>
+                                <option value="BADMINTON">Badminton</option>
+                            </select>
+                        </label>
+                        <button class="btn btn-primary" type="submit">Enregistrer</button>
+                        <button class="btn btn-ghost hidden" type="button" id="participant-cancel">Annuler</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h3>Liste des pratiquants</h3>
+                    <table id="participants-table" class="data-table">
+                        <thead><tr><th>Nom</th><th>Prénom</th><th>Catégorie</th><th></th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Onglet Affrontements -->
+            <div id="tab-matches" class="tab-panel hidden">
+                <div class="card">
+                    <h3>Créer un affrontement</h3>
+                    <form id="match-form" class="form inline">
+                        <label>Pratiquant MMA
+                            <select name="participant_mma_id" required></select>
+                        </label>
+                        <label>Pratiquant Badminton
+                            <select name="participant_bad_id" required></select>
+                        </label>
+                        <label>Ordre <input type="number" name="ordre" value="0" min="0"></label>
+                        <button class="btn btn-primary" type="submit">Créer</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h3>Tableau des affrontements</h3>
+                    <div id="matches-list" class="matches-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================ PRATIQUANT ============================ -->
+        <section id="view-participant" class="view hidden">
+            <div class="card">
+                <h2>Mes affrontements</h2>
+                <div id="my-matches" class="matches-list"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modale de saisie des résultats -->
+    <div id="result-modal" class="modal hidden">
+        <div class="modal-box">
+            <button class="modal-close" id="result-close">&times;</button>
+            <h3 id="result-title">Résultats de l'affrontement</h3>
+
+            <div class="round">
+                <h4>Manche 1 — Badminton <span class="rule">MMA gagne à 11 • Badminton gagne à 21 • pas de smash</span></h4>
+                <div class="form inline">
+                    <label id="lbl-score-mma">Score MMA <input type="number" id="score-mma" min="0"></label>
+                    <label id="lbl-score-bad">Score Badminton <input type="number" id="score-bad" min="0"></label>
+                </div>
+                <p id="bad-winner" class="winner-line"></p>
+            </div>
+
+            <div class="round">
+                <h4>Manche 2 — MMA <span class="rule">Badminton a droit aux percussions • gagne s'il n'est pas soumis en 60&nbsp;s</span></h4>
+                <div class="timer-block">
+                    <div id="timer-display" class="timer">01:00</div>
+                    <button class="btn btn-ghost" id="timer-start" type="button">Démarrer</button>
+                    <button class="btn btn-ghost" id="timer-reset" type="button">Réinitialiser</button>
+                </div>
+                <div class="form inline">
+                    <label>Issue
+                        <select id="mma-soumission">
+                            <option value="">— Non saisie —</option>
+                            <option value="1">Badminton soumis (MMA gagne)</option>
+                            <option value="0">Non soumis en 60 s (Badminton gagne)</option>
+                        </select>
+                    </label>
+                    <label>Durée (s) <input type="number" id="mma-duree" min="0" max="60"></label>
+                </div>
+                <p id="mma-winner" class="winner-line"></p>
+            </div>
+
+            <div class="round decisive hidden" id="decisive-block">
+                <h4>Manche décisive (1-1)</h4>
+                <label>Vainqueur de l'affrontement
+                    <select id="decisive-winner">
+                        <option value="">— Choisir —</option>
+                    </select>
+                </label>
+            </div>
+
+            <p id="result-error" class="error hidden"></p>
+            <div class="modal-actions">
+                <button class="btn btn-primary" id="result-save">Enregistrer les résultats</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/app.js"></script>
+</body>
+</html>

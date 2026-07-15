@@ -1,0 +1,45 @@
+# Exemple de configuration Nginx 1.30 pour l'application « Badminton vs MMA ».
+# Adapter « root », « server_name » et le socket PHP-FPM à votre environnement Jelastic/Infomaniak.
+
+server {
+    listen 80;
+    server_name badmma.exemple.com;
+
+    root /var/www/webroot/ROOT;   # racine du dépôt (contient index.html et le dossier api/)
+    index index.html;
+
+    # Ne jamais servir le fichier de config contenant les secrets.
+    location = /api/config.php {
+        deny all;
+        return 404;
+    }
+
+    # Routage de toutes les requêtes /api/... vers le front controller PHP.
+    location /api/ {
+        try_files $uri /api/index.php$is_args$args;
+    }
+
+    location ~ ^/api/index\.php$ {
+        include fastcgi_params;
+        fastcgi_pass 127.0.0.1:9000;   # ou le socket unix PHP-FPM : unix:/var/run/php-fpm.sock
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+    }
+
+    # Bloquer l'accès direct aux autres fichiers PHP internes.
+    location ~ \.php$ {
+        deny all;
+        return 404;
+    }
+
+    # Fichiers statiques du frontend.
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # Cache léger pour les assets.
+    location ~* \.(css|js|png|jpg|jpeg|gif|svg|woff2?)$ {
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+}

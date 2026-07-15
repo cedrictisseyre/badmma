@@ -1,0 +1,15 @@
+# Secrets / config locale
+api/config.php
+
+# Dépendances
+/vendor/
+/node_modules/
+
+# Logs
+*.log
+
+# OS / éditeurs
+.DS_Store
+.idea/
+.vscode/
+*.swp

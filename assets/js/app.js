@@ -1,0 +1,469 @@
+/**
+ * Logique applicative : connexion, vues admin/pratiquant, gestion des données.
+ */
+(() => {
+    'use strict';
+
+    // ------------------------------------------------------------------ //
+    // Utilitaires
+    // ------------------------------------------------------------------ //
+    const $ = (sel, ctx = document) => ctx.querySelector(sel);
+    const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+
+    /** Échappement HTML anti-XSS. */
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
+    const state = { session: null, participants: [] };
+
+    function showView(id) {
+        $$('.view').forEach((v) => v.classList.add('hidden'));
+        $(`#${id}`).classList.remove('hidden');
+    }
+
+    function showSessionInfo() {
+        const info = $('#session-info');
+        if (state.session && state.session.role) {
+            info.classList.remove('hidden');
+            $('#session-name').textContent = state.session.name || '';
+        } else {
+            info.classList.add('hidden');
+        }
+    }
+
+    // ------------------------------------------------------------------ //
+    // Démarrage
+    // ------------------------------------------------------------------ //
+    async function init() {
+        try {
+            const me = await Api.me();
+            Api.setCsrf(me.csrf);
+            state.session = me;
+            route();
+        } catch (e) {
+            showView('view-login');
+        }
+        bindGlobalEvents();
+    }
+
+    function route() {
+        showSessionInfo();
+        if (!state.session || !state.session.role) {
+            showView('view-login');
+        } else if (state.session.role === 'admin') {
+            showView('view-admin');
+            loadAdmin();
+        } else {
+            showView('view-participant');
+            loadParticipantView();
+        }
+    }
+
+    // ------------------------------------------------------------------ //
+    // Événements globaux
+    // ------------------------------------------------------------------ //
+    function bindGlobalEvents() {
+        $('#logout-btn').addEventListener('click', async () => {
+            await Api.logout();
+            state.session = null;
+            route();
+        });
+
+        $('#admin-login-form').addEventListener('submit', onAdminLogin);
+        $('#participant-login-form').addEventListener('submit', onParticipantLogin);
+
+        // Onglets admin
+        $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
+            $$('.tab').forEach((t) => t.classList.remove('active'));
+            tab.classList.add('active');
+            $$('.tab-panel').forEach((p) => p.classList.add('hidden'));
+            $(`#tab-${tab.dataset.tab}`).classList.remove('hidden');
+        }));
+
+        $('#participant-form').addEventListener('submit', onSaveParticipant);
+        $('#participant-cancel').addEventListener('click', resetParticipantForm);
+        $('#match-form').addEventListener('submit', onCreateMatch);
+
+        // Modale résultats
+        $('#result-close').addEventListener('click', closeResultModal);
+        $('#score-mma').addEventListener('input', refreshBadWinnerHint);
+        $('#score-bad').addEventListener('input', refreshBadWinnerHint);
+        $('#mma-soumission').addEventListener('change', refreshMmaWinnerHint);
+        $('#result-save').addEventListener('click', onSaveRounds);
+        bindTimer();
+    }
+
+    // ------------------------------------------------------------------ //
+    // Connexion
+    // ------------------------------------------------------------------ //
+    async function onAdminLogin(e) {
+        e.preventDefault();
+        const f = e.target;
+        try {
+            const me = await Api.adminLogin(f.username.value, f.password.value);
+            Api.setCsrf(me.csrf);
+            state.session = me;
+            f.reset();
+            route();
+        } catch (err) { loginError(err.message); }
+    }
+
+    async function onParticipantLogin(e) {
+        e.preventDefault();
+        const f = e.target;
+        try {
+            const me = await Api.participantLogin(f.nom.value, f.prenom.value);
+            Api.setCsrf(me.csrf);
+            state.session = me;
+            f.reset();
+            route();
+        } catch (err) { loginError(err.message); }
+    }
+
+    function loginError(msg) {
+        const el = $('#login-error');
+        el.textContent = msg;
+        el.classList.remove('hidden');
+    }
+
+    // ------------------------------------------------------------------ //
+    // Espace admin
+    // ------------------------------------------------------------------ //
+    async function loadAdmin() {
+        await loadParticipants();
+        await loadMatches();
+    }
+
+    async function loadParticipants() {
+        state.participants = await Api.listParticipants();
+        renderParticipantsTable();
+        fillMatchSelects();
+    }
+
+    function renderParticipantsTable() {
+        const tbody = $('#participants-table tbody');
+        tbody.innerHTML = state.participants.map((p) => `
+            <tr>
+                <td>${esc(p.nom)}</td>
+                <td>${esc(p.prenom)}</td>
+                <td><span class="badge ${esc(p.categorie)}">${esc(p.categorie)}</span></td>
+                <td>
+                    <button class="btn btn-ghost btn-sm" data-edit="${p.id}">Modifier</button>
+                    <button class="btn btn-danger btn-sm" data-del="${p.id}">Suppr.</button>
+                </td>
+            </tr>`).join('');
+
+        $$('[data-edit]', tbody).forEach((b) =>
+            b.addEventListener('click', () => editParticipant(Number(b.dataset.edit))));
+        $$('[data-del]', tbody).forEach((b) =>
+            b.addEventListener('click', () => removeParticipant(Number(b.dataset.del))));
+    }
+
+    async function onSaveParticipant(e) {
+        e.preventDefault();
+        const f = e.target;
+        const payload = {
+            nom: f.nom.value.trim(),
+            prenom: f.prenom.value.trim(),
+            categorie: f.categorie.value,
+        };
+        try {
+            if (f.id.value) {
+                await Api.updateParticipant(Number(f.id.value), payload);
+            } else {
+                await Api.createParticipant(payload);
+            }
+            resetParticipantForm();
+            await loadParticipants();
+        } catch (err) { alert(err.message); }
+    }
+
+    function editParticipant(id) {
+        const p = state.participants.find((x) => x.id === id);
+        if (!p) return;
+        const f = $('#participant-form');
+        f.id.value = p.id;
+        f.nom.value = p.nom;
+        f.prenom.value = p.prenom;
+        f.categorie.value = p.categorie;
+        $('#participant-cancel').classList.remove('hidden');
+    }
+
+    function resetParticipantForm() {
+        const f = $('#participant-form');
+        f.reset();
+        f.id.value = '';
+        $('#participant-cancel').classList.add('hidden');
+    }
+
+    async function removeParticipant(id) {
+        if (!confirm('Supprimer ce pratiquant ? Ses affrontements seront aussi supprimés.')) return;
+        try {
+            await Api.deleteParticipant(id);
+            await loadParticipants();
+            await loadMatches();
+        } catch (err) { alert(err.message); }
+    }
+
+    function fillMatchSelects() {
+        const mma = state.participants.filter((p) => p.categorie === 'MMA');
+        const bad = state.participants.filter((p) => p.categorie === 'BADMINTON');
+        const opt = (p) => `<option value="${p.id}">${esc(p.prenom)} ${esc(p.nom)}</option>`;
+        $('select[name="participant_mma_id"]').innerHTML = mma.map(opt).join('');
+        $('select[name="participant_bad_id"]').innerHTML = bad.map(opt).join('');
+    }
+
+    async function onCreateMatch(e) {
+        e.preventDefault();
+        const f = e.target;
+        try {
+            await Api.createMatch({
+                participant_mma_id: Number(f.participant_mma_id.value),
+                participant_bad_id: Number(f.participant_bad_id.value),
+                ordre: Number(f.ordre.value) || 0,
+            });
+            await loadMatches();
+        } catch (err) { alert(err.message); }
+    }
+
+    async function loadMatches() {
+        const matches = await Api.listMatches();
+        renderMatches(matches, $('#matches-list'), true);
+    }
+
+    // ------------------------------------------------------------------ //
+    // Rendu des affrontements
+    // ------------------------------------------------------------------ //
+    function renderMatches(matches, container, isAdmin) {
+        if (!matches.length) {
+            container.innerHTML = '<p class="muted">Aucun affrontement pour le moment.</p>';
+            return;
+        }
+        container.innerHTML = matches.map((m) => matchCard(m, isAdmin)).join('');
+
+        if (isAdmin) {
+            $$('[data-result]', container).forEach((b) =>
+                b.addEventListener('click', () => openResultModal(Number(b.dataset.result))));
+            $$('[data-delmatch]', container).forEach((b) =>
+                b.addEventListener('click', () => removeMatch(Number(b.dataset.delmatch))));
+        }
+        window.__matches = matches; // cache pour la modale
+    }
+
+    function matchCard(m, isAdmin) {
+        const winMma = m.vainqueur_id && Number(m.vainqueur_id) === Number(m.participant_mma_id);
+        const winBad = m.vainqueur_id && Number(m.vainqueur_id) === Number(m.participant_bad_id);
+        const statutLabel = { a_venir: 'À venir', en_cours: 'En cours', termine: 'Terminé' }[m.statut];
+
+        const bad = m.rounds && m.rounds.BADMINTON;
+        const mma = m.rounds && m.rounds.MMA;
+        const roundsHtml = `
+            <div class="match-rounds">
+                <div>🏸 Badminton : ${bad
+                    ? `MMA ${esc(bad.score_mma ?? '–')} / Bad ${esc(bad.score_bad ?? '–')}`
+                    : 'non joué'}</div>
+                <div>🥊 MMA : ${mma
+                    ? (mma.soumission === '1' || mma.soumission === 1
+                        ? 'Soumission (MMA gagne)'
+                        : (mma.soumission === '0' || mma.soumission === 0
+                            ? 'Non soumis en 60 s (Badminton gagne)'
+                            : 'non joué'))
+                    : 'non joué'}</div>
+            </div>`;
+
+        return `
+            <div class="match">
+                <div class="match-head">
+                    <div class="fighters">
+                        <span class="badge MMA">MMA</span>
+                        <span class="fighter ${winMma ? 'win' : ''}">${esc(m.mma_nom)}</span>
+                        <span class="vs">VS</span>
+                        <span class="fighter ${winBad ? 'win' : ''}">${esc(m.bad_nom)}</span>
+                        <span class="badge BADMINTON">BAD</span>
+                    </div>
+                    <span class="status ${esc(m.statut)}">${statutLabel}</span>
+                </div>
+                ${roundsHtml}
+                ${isAdmin ? `
+                <div class="match-actions">
+                    <button class="btn btn-primary btn-sm" data-result="${m.id}">Saisir / modifier résultats</button>
+                    <button class="btn btn-danger btn-sm" data-delmatch="${m.id}">Supprimer</button>
+                </div>` : ''}
+            </div>`;
+    }
+
+    async function removeMatch(id) {
+        if (!confirm('Supprimer cet affrontement ?')) return;
+        await Api.deleteMatch(id);
+        await loadMatches();
+    }
+
+    // ------------------------------------------------------------------ //
+    // Modale de saisie des résultats
+    // ------------------------------------------------------------------ //
+    let currentMatch = null;
+
+    function openResultModal(id) {
+        currentMatch = (window.__matches || []).find((m) => Number(m.id) === id);
+        if (!currentMatch) return;
+
+        $('#result-title').textContent = `${currentMatch.mma_nom} (MMA) vs ${currentMatch.bad_nom} (Bad)`;
+        $('#result-error').classList.add('hidden');
+
+        const bad = currentMatch.rounds.BADMINTON || {};
+        const mma = currentMatch.rounds.MMA || {};
+        $('#score-mma').value = bad.score_mma ?? '';
+        $('#score-bad').value = bad.score_bad ?? '';
+        $('#mma-soumission').value = mma.soumission === null || mma.soumission === undefined ? '' : String(mma.soumission);
+        $('#mma-duree').value = mma.duree_secondes ?? '';
+
+        // Manche décisive
+        const dec = $('#decisive-winner');
+        dec.innerHTML = `<option value="">— Choisir —</option>
+            <option value="${currentMatch.participant_mma_id}">${esc(currentMatch.mma_nom)} (MMA)</option>
+            <option value="${currentMatch.participant_bad_id}">${esc(currentMatch.bad_nom)} (Bad)</option>`;
+        dec.value = currentMatch.vainqueur_id ?? '';
+
+        resetTimer();
+        refreshBadWinnerHint();
+        refreshMmaWinnerHint();
+        $('#result-modal').classList.remove('hidden');
+    }
+
+    function closeResultModal() {
+        $('#result-modal').classList.add('hidden');
+        stopTimer();
+        currentMatch = null;
+    }
+
+    function computeBadWinner() {
+        const sm = parseInt($('#score-mma').value, 10);
+        const sb = parseInt($('#score-bad').value, 10);
+        if (Number.isNaN(sm) || Number.isNaN(sb)) return null;
+        if (sb >= 21 && sb > sm) return 'BAD';
+        if (sm >= 11 && sm > sb) return 'MMA';
+        return null;
+    }
+
+    function computeMmaWinner() {
+        const v = $('#mma-soumission').value;
+        if (v === '') return null;
+        return v === '1' ? 'MMA' : 'BAD';
+    }
+
+    function refreshBadWinnerHint() {
+        const w = computeBadWinner();
+        $('#bad-winner').textContent = w
+            ? `Vainqueur manche badminton : ${w === 'MMA' ? currentMatch.mma_nom : currentMatch.bad_nom}`
+            : '';
+        updateDecisiveVisibility();
+    }
+
+    function refreshMmaWinnerHint() {
+        const w = computeMmaWinner();
+        $('#mma-winner').textContent = w
+            ? `Vainqueur manche MMA : ${w === 'MMA' ? currentMatch.mma_nom : currentMatch.bad_nom}`
+            : '';
+        updateDecisiveVisibility();
+    }
+
+    function updateDecisiveVisibility() {
+        const b = computeBadWinner();
+        const m = computeMmaWinner();
+        const needDecisive = b && m && b !== m;
+        $('#decisive-block').classList.toggle('hidden', !needDecisive);
+    }
+
+    async function onSaveRounds() {
+        const payload = {};
+        const sm = $('#score-mma').value;
+        const sb = $('#score-bad').value;
+        if (sm !== '' || sb !== '') {
+            payload.badminton = { score_mma: sm === '' ? null : Number(sm), score_bad: sb === '' ? null : Number(sb) };
+        }
+        const soum = $('#mma-soumission').value;
+        if (soum !== '') {
+            payload.mma = { soumission: Number(soum), duree_secondes: $('#mma-duree').value === '' ? null : Number($('#mma-duree').value) };
+        }
+        const b = computeBadWinner();
+        const m = computeMmaWinner();
+        if (b && m && b !== m) {
+            const dec = $('#decisive-winner').value;
+            if (!dec) {
+                return resultError('Match nul 1-1 : veuillez désigner le vainqueur de la manche décisive.');
+            }
+            payload.vainqueur_id = Number(dec);
+        }
+
+        try {
+            await Api.saveRounds(currentMatch.id, payload);
+            closeResultModal();
+            await loadMatches();
+        } catch (err) { resultError(err.message); }
+    }
+
+    function resultError(msg) {
+        const el = $('#result-error');
+        el.textContent = msg;
+        el.classList.remove('hidden');
+    }
+
+    // ------------------------------------------------------------------ //
+    // Minuteur 60 s (manche MMA)
+    // ------------------------------------------------------------------ //
+    let timerId = null;
+    let remaining = 60;
+
+    function bindTimer() {
+        $('#timer-start').addEventListener('click', toggleTimer);
+        $('#timer-reset').addEventListener('click', resetTimer);
+    }
+
+    function renderTimer() {
+        const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+        const ss = String(remaining % 60).padStart(2, '0');
+        const el = $('#timer-display');
+        el.textContent = `${mm}:${ss}`;
+        el.classList.toggle('warn', remaining <= 10);
+    }
+
+    function toggleTimer() {
+        if (timerId) { stopTimer(); return; }
+        $('#timer-start').textContent = 'Pause';
+        timerId = setInterval(() => {
+            remaining -= 1;
+            renderTimer();
+            if (remaining <= 0) {
+                stopTimer();
+                // Temps écoulé sans soumission => le badminton gagne.
+                if ($('#mma-soumission').value === '') {
+                    $('#mma-soumission').value = '0';
+                    $('#mma-duree').value = 60;
+                    refreshMmaWinnerHint();
+                }
+            }
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerId) { clearInterval(timerId); timerId = null; }
+        $('#timer-start').textContent = 'Démarrer';
+    }
+
+    function resetTimer() {
+        stopTimer();
+        remaining = 60;
+        renderTimer();
+    }
+
+    // ------------------------------------------------------------------ //
+    // Espace pratiquant
+    // ------------------------------------------------------------------ //
+    async function loadParticipantView() {
+        const matches = await Api.myMatches();
+        renderMatches(matches, $('#my-matches'), false);
+    }
+
+    init();
+})();
