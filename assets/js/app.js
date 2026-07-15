@@ -233,8 +233,8 @@
         const mma = state.participants.filter((p) => p.categorie === 'MMA');
         const bad = state.participants.filter((p) => p.categorie === 'BADMINTON');
         const opt = (p) => `<option value="${p.id}">${esc(p.prenom)} ${esc(p.nom)}</option>`;
-        $('select[name="participant_mma_id"]').innerHTML = mma.map(opt).join('');
-        $('select[name="participant_bad_id"]').innerHTML = bad.map(opt).join('');
+        $$('select[name="participant_mma_id"]').forEach((s) => { s.innerHTML = mma.map(opt).join(''); });
+        $$('select[name="participant_bad_id"]').forEach((s) => { s.innerHTML = bad.map(opt).join(''); });
     }
 
     async function onCreateMatch(e) {
@@ -242,6 +242,7 @@
         const f = e.target;
         try {
             await Api.createMatch({
+                discipline: f.dataset.discipline,
                 participant_mma_id: Number(f.participant_mma_id.value),
                 participant_bad_id: Number(f.participant_bad_id.value),
                 ordre: Number(f.ordre.value) || 0,
@@ -251,19 +252,21 @@
     }
 
     async function loadMatches() {
-        const matches = await Api.listMatches();
-        renderMatches(matches, $('#matches-list'), true);
+        state.matches = await Api.listMatches();
+        renderMatches(state.matches, $('#matches-list'), true);
     }
 
     // ------------------------------------------------------------------ //
     // Rendu des affrontements
     // ------------------------------------------------------------------ //
     function renderMatches(matches, container, isAdmin) {
-        if (!matches.length) {
-            container.innerHTML = '<p class="muted">Aucun affrontement pour le moment.</p>';
+        const filter = isAdmin ? state.matchFilter : 'ALL';
+        const list = (matches || []).filter((m) => filter === 'ALL' || m.discipline === filter);
+        if (!list.length) {
+            container.innerHTML = '<p class="muted">Aucun affrontement.</p>';
             return;
         }
-        container.innerHTML = matches.map((m) => matchCard(m, isAdmin)).join('');
+        container.innerHTML = list.map((m) => matchCard(m, isAdmin)).join('');
 
         if (isAdmin) {
             $$('[data-result]', container).forEach((b) =>
@@ -271,32 +274,31 @@
             $$('[data-delmatch]', container).forEach((b) =>
                 b.addEventListener('click', () => removeMatch(Number(b.dataset.delmatch))));
         }
-        window.__matches = matches; // cache pour la modale
     }
 
     function matchCard(m, isAdmin) {
         const winMma = m.vainqueur_id && Number(m.vainqueur_id) === Number(m.participant_mma_id);
         const winBad = m.vainqueur_id && Number(m.vainqueur_id) === Number(m.participant_bad_id);
         const statutLabel = { a_venir: 'À venir', en_cours: 'En cours', termine: 'Terminé' }[m.statut];
+        const isBad = m.discipline === 'BADMINTON';
 
-        const bad = m.rounds && m.rounds.BADMINTON;
-        const mma = m.rounds && m.rounds.MMA;
-        const roundsHtml = `
-            <div class="match-rounds">
-                <div>🏸 Badminton : ${bad
-                    ? `MMA ${esc(bad.score_mma ?? '–')} / Bad ${esc(bad.score_bad ?? '–')}`
-                    : 'non joué'}</div>
-                <div>🥊 MMA : ${mma
-                    ? (mma.soumission === '1' || mma.soumission === 1
-                        ? 'Soumission (MMA gagne)'
-                        : (mma.soumission === '0' || mma.soumission === 0
-                            ? 'Non soumis en 60 s (Badminton gagne)'
-                            : 'non joué'))
-                    : 'non joué'}</div>
-            </div>`;
+        let resume;
+        if (isBad) {
+            const played = m.score_mma !== null && m.score_mma !== undefined && m.score_mma !== '';
+            resume = played
+                ? `Score — MMA ${esc(m.score_mma)} / Badminton ${esc(m.score_bad)}`
+                : 'Résultat non saisi';
+        } else {
+            const s = m.soumission;
+            resume = (s === null || s === undefined || s === '')
+                ? 'Résultat non saisi'
+                : (String(s) === '1'
+                    ? `Soumission en ${esc(m.duree_secondes ?? '?')} s (MMA gagne)`
+                    : 'Non soumis en 60 s (Badminton gagne)');
+        }
 
         return `
-            <div class="match">
+            <div class="match ${isBad ? 'is-bad' : 'is-mma'}">
                 <div class="match-head">
                     <div class="fighters">
                         <span class="badge MMA">MMA</span>
@@ -305,12 +307,15 @@
                         <span class="fighter ${winBad ? 'win' : ''}">${esc(m.bad_nom)}</span>
                         <span class="badge BADMINTON">BAD</span>
                     </div>
+                    <span class="disc-tag ${isBad ? 'BADMINTON' : 'MMA'}">${isBad ? '🏸 Badminton' : '🥊 MMA'}</span>
+                </div>
+                <div class="match-rounds">
+                    <div>${resume}</div>
                     <span class="status ${esc(m.statut)}">${statutLabel}</span>
                 </div>
-                ${roundsHtml}
                 ${isAdmin ? `
                 <div class="match-actions">
-                    <button class="btn btn-primary btn-sm" data-result="${m.id}">Saisir / modifier résultats</button>
+                    <button class="btn btn-primary btn-sm" data-result="${m.id}">Saisir / modifier le résultat</button>
                     <button class="btn btn-danger btn-sm" data-delmatch="${m.id}">Supprimer</button>
                 </div>` : ''}
             </div>`;
